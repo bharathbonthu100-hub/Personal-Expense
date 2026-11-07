@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const periods = {
@@ -52,6 +52,8 @@ function App() {
   const [profile, setProfile] = useState({ name: "Manikanta", email: "manikanta@example.com" });
   const [showProfile, setShowProfile] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef(null);
   const [backendError, setBackendError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -131,6 +133,13 @@ function App() {
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!target) showNotice(`${name} is ready to configure.`);
   };
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+  const visibleExpenses = expenseRows.filter((row) => {
+    const query = searchQuery.trim().toLowerCase();
+    return !query || `${row.name} ${row.category} ${row.date}`.toLowerCase().includes(query);
+  });
   const [total, range, bars] = periods[period];
 
   return <div className="app-shell">
@@ -156,7 +165,7 @@ function App() {
     <main className="main-content" id="overview">
       {!supabaseConfigured && <div className="backend-warning">Demo mode is active: expenses save in this browser. Add Supabase values from <code>.env.example</code> to share them with other people.</div>}
       {backendError && <div className="backend-error">{backendError}</div>}
-      <header className="topbar"><div><p className="eyebrow">Saturday, June 22, 2024</p><h1>Good morning, {profile.name} <span className="wave">✦</span></h1></div><div className="topbar-actions"><button className="search-box" onClick={() => { setSearchOpen((value) => !value); showNotice("Search is ready."); }}><span>⌕</span><span>{searchOpen ? "Search enabled" : "Search anything"}</span><kbd>⌘ K</kbd></button><button className="notification-button" onClick={() => showNotice("You have no new notifications.")} aria-label="Notifications">♢<i></i></button><button className="avatar-button" onClick={() => setShowProfile(true)}>{profile.name.charAt(0).toUpperCase()}</button></div></header>
+      <header className="topbar"><div><p className="eyebrow">Saturday, June 22, 2024</p><h1>Good morning, {profile.name} <span className="wave">✦</span></h1></div><div className="topbar-actions"><div className="search-box" role="search"><span>⌕</span><input ref={searchInputRef} value={searchQuery} onFocus={() => setSearchOpen(true)} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => event.key === "Escape" && setSearchOpen(false)} placeholder="Search anything" aria-label="Search transactions" /><kbd>⌘ K</kbd></div><button className="notification-button" onClick={() => showNotice("You have no new notifications.")} aria-label="Notifications">♢<i></i></button><button className="avatar-button" onClick={() => setShowProfile(true)}>{profile.name.charAt(0).toUpperCase()}</button></div></header>
       <section className="summary-grid">
         <article className="summary-card balance-card"><div className="card-heading"><span className="card-label">Total balance</span><span className="card-menu">•••</span></div><div className="balance-amount">₹0<span>.00</span></div><div className="balance-footer"><span className="neutral">— 0%</span><span>vs. last month</span></div><div className="mini-bars">{Array.from({ length: 19 }, (_, i) => <i key={i}></i>)}</div></article>
         <SummaryCard label="Monthly income" icon="↗" iconClass="income-icon" amount={< >₹0<span>.00</span></>} change="— 0%" changeClass="neutral"><div className="thin-progress income-progress"><span style={{ width: "0%" }}></span></div><div className="card-note"><span>Salary</span><strong>₹0.00</strong></div></SummaryCard>
@@ -167,7 +176,7 @@ function App() {
       <section className="dashboard-grid">
         <article className="panel spending-panel"><div className="panel-header"><div><p className="eyebrow">Spending overview</p><h2>Where your money goes</h2></div><div className="period-switch">{Object.keys(periods).map((key) => <button key={key} className={`period ${period === key ? "active" : ""}`} onClick={() => setPeriod(key)}>{key[0].toUpperCase() + key.slice(1)}</button>)}</div></div><div className="chart-summary"><strong>{total}</strong><span>total spent <b>•</b> <em>{range}</em></span></div><div className="chart-area"><div className="chart-y-axis"><span>₹1k</span><span>₹750</span><span>₹500</span><span>₹250</span><span>₹0</span></div><div className="chart-grid-lines"><i></i><i></i><i></i><i></i><i></i></div><div className="chart-bars">{bars.map((height, index) => <div className="chart-column" key={index}><span className={`bar ${index === 5 ? "highlight" : ""}`} style={{ height: `${height}%` }}>{index === 5 && <b>₹840</b>}</span><small>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}</small></div>)}</div></div></article>
         <CategoryPanel onAction={showNotice} />
-        <article className="panel transactions-panel" id="transactions"><div className="panel-header"><div><p className="eyebrow">Latest activity</p><h2>Recent transactions</h2></div><button className="outline-button" onClick={openExpenseModal}>+ Add expense</button></div><div className="transaction-table"><div className="transaction-row transaction-head"><span>TRANSACTION</span><span>CATEGORY</span><span>DATE</span><span>AMOUNT</span></div>{expenseRows.length ? expenseRows.map((item) => <TransactionRow transaction={{ ...item, onEdit: () => editExpense(item), onDelete: () => deleteExpense(item.id) }} key={item.id} />) : <div className="empty-transactions"><span>✦</span><strong>No transactions yet</strong><small>Your expense history will appear here after you add your first expense.</small><button className="text-button" onClick={openExpenseModal}>Add your first expense <span>→</span></button></div>}</div><button className="text-button table-button" onClick={() => handleNavClick("Transactions")}>View all transactions <span>→</span></button></article>
+        <article className="panel transactions-panel" id="transactions"><div className="panel-header"><div><p className="eyebrow">Latest activity</p><h2>Recent transactions</h2></div><button className="outline-button" onClick={openExpenseModal}>+ Add expense</button></div><div className="transaction-table"><div className="transaction-row transaction-head"><span>TRANSACTION</span><span>CATEGORY</span><span>DATE</span><span>AMOUNT</span></div>{visibleExpenses.length ? visibleExpenses.map((item) => <TransactionRow transaction={{ ...item, onEdit: () => editExpense(item), onDelete: () => deleteExpense(item.id) }} key={item.id} />) : <div className="empty-transactions"><span>✦</span><strong>{searchQuery ? "No matching transactions" : "No transactions yet"}</strong><small>{searchQuery ? "Try a different search term." : "Your expense history will appear here after you add your first expense."}</small><button className="text-button" onClick={openExpenseModal}>{searchQuery ? "Add expense" : "Add your first expense"} <span>→</span></button></div>}</div><button className="text-button table-button" onClick={() => handleNavClick("Transactions")}>View all transactions <span>→</span></button></article>
         <GoalsPanel onAction={showNotice} />
       </section>
       <footer className="footer"><span>Clearpath finance workspace</span><span>Last synced just now <i></i></span></footer>
